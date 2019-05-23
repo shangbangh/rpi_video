@@ -4,11 +4,7 @@ from PIL import Image
 import numpy as np
 import cv2
 from matplotlib import pyplot as plt
-from scipy.signal import convolve2d
 from scipy import ndimage
-from cv2 import COLOR_GRAY2RGB
-from math import sqrt
-from matplotlib.pyplot import ylabel
 '''
 Created on Apr 23, 2019
 
@@ -35,7 +31,35 @@ class ImageRepresentations(object):
             Image.fromarray(self.image_array, "RGB")
         self.filtered_images = []
         self.edged_images = []
+        self.face_in_frame = None
+        self.image_histogram = None
+        self.figure = None
+        self.histograms = []
         
+    def process_image(self):
+        self.populate_filtered_images()
+        self.sobel_edge_detection()
+        self.erosion()
+        self.dilation()
+        self.histogram()
+        self.canny_edge_detection(min_threshold=100,max_threshold=200)
+        self.hough_line_transform()
+        self.hough_circle_transform()
+        self.face_detection()
+        
+    def process_faces(self, frame_queue):
+        while True:
+            frame = frame_queue.get()
+            self.face_in_frame = detect_face(frame)
+            with frame_queue.mutex:
+                frame_queue.queue.clear()
+    
+    def process_histogram(self, frame_queue):
+        while True:
+            frame = frame_queue.get()
+            self.image_histogram = self.histogram_of(frame)
+            with frame_queue.mutex:
+                frame_queue.queue.clear()
         
     def populate_filtered_images(self):
 #         red, green, and blue channel only, respectively
@@ -121,44 +145,48 @@ class ImageRepresentations(object):
         self.dilated_image = Image.fromarray(dilation, "RGB")
         
     def histogram(self):
-        self.image_histogram = Image.fromarray(histogram_of(self.image_array))
+        self.image_histogram = Image.fromarray(self.histogram_of(self.image_array))
         
     def face_detection(self):
         img = np.copy(self.image_array)
-        face_cascade = cv2.CascadeClassifier('C:\\Python37\\Lib\\site-packages\\cv2\\data\\haarcascade_frontalface_default.xml')
-        eye_cascade = cv2.CascadeClassifier('C:\\Python37\\Lib\\site-packages\\cv2\\data\\haarcascade_eye.xml')
-        gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-        if (faces is not None):
-            for (x,y,w,h) in faces:
-                img = cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
-                roi_gray = gray[y:y+h, x:x+w]
-                roi_color = img[y:y+h, x:x+w]
-                eyes = eye_cascade.detectMultiScale(roi_gray)
-                for (ex,ey,ew,eh) in eyes:
-                    cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
+        detect_face(img)
+        self.detected_faces_array = img
         self.detected_faces = Image.fromarray(img,"RGB")
         
+    def histogram_of(self,img):
+        # img: numpy image array
+        fig, sub = plt.subplots(4, 1)
+        self.figure, self.histograms = fig, sub
+        sub[0].hist(img.ravel(),256,[10,256])
+        sub[0].set(title="RGB Pixel Breakdown")
+        sub[1].hist(img[:,:,0].ravel(),256,[10,256])
+        sub[1].set(title="Red Pixel Breakdown")
+        sub[2].hist(img[:,:,1].ravel(),256,[10,256])
+        sub[2].set(title="Green Pixel Breakdown")
+        sub[3].hist(img[:,:,2].ravel(),256,[10,256])
+        sub[3].set(title="Blue Pixel Breakdown")
+        fig.text(0.5, 0.01, 'Pixel Intensity', ha='center')
+        fig.text(0, 0.5, 'Number of Pixels', va='center', rotation='vertical')
+        fig.tight_layout()
+        fig.canvas.draw()
+        data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        return data
         
-def histogram_of(img):
-    # img: numpy image array
-    fig, sub = plt.subplots(4, 1)
-    sub[0].hist(img.ravel(),256,[10,256])
-    sub[0].set(title="RGB Pixel Breakdown")
-    sub[1].hist(img[:,:,0].ravel(),256,[10,256])
-    sub[1].set(title="Red Pixel Breakdown")
-    sub[2].hist(img[:,:,1].ravel(),256,[10,256])
-    sub[2].set(title="Green Pixel Breakdown")
-    sub[3].hist(img[:,:,2].ravel(),256,[10,256])
-    sub[3].set(title="Blue Pixel Breakdown")
-    fig.text(0.5, 0.01, 'Pixel Intensity', ha='center')
-    fig.text(0, 0.5, 'Number of Pixels', va='center', rotation='vertical')
-    fig.tight_layout()
-    fig.canvas.draw()
-    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    return data
-#     plt.show()
+def detect_face(img):
+    face_cascade = cv2.CascadeClassifier('C:\\Python37\\Lib\\site-packages\\cv2\\data\\haarcascade_frontalface_default.xml')
+    eye_cascade = cv2.CascadeClassifier('C:\\Python37\\Lib\\site-packages\\cv2\\data\\haarcascade_eye.xml')
+    gray = cv2.cvtColor(img,cv2.COLOR_RGB2GRAY)
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    if (faces is not None):
+        for (x,y,w,h) in faces:
+            img = cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+            roi_gray = gray[y:y+h, x:x+w]
+            roi_color = img[y:y+h, x:x+w]
+            eyes = eye_cascade.detectMultiScale(roi_gray)
+            for (ex,ey,ew,eh) in eyes:
+                cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
+    return img
     
 def stream_to_image(stream):
     npimg = np.fromfile(stream, np.uint8)

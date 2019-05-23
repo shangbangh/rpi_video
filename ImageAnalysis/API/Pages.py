@@ -5,9 +5,22 @@ class HTML_pages(object):
     <head> 
         <title>Video Streaming </title> 
     </head> 
-    <body> 
-        <h1> Live Video Streaming </h1> 
-        <img src="{{ url_for('video_feed') }}"> 
+    <body>
+        <div>
+            <h1> Live Video Streaming </h1> 
+            <img src="http://localhost:5000/video_feed">
+        </div>
+        <div>
+            <h1>Face Detection</h1>
+            <img src="http://localhost:5000/faces-2">
+        </div>
+        <br>
+        <br>
+        <br>
+        <div>
+            <h1>Pixel Histogram</h1>
+            <img src="http://localhost:5000/histogram-2">
+        </div>
         </body> 
     </html> 
     '''
@@ -27,8 +40,8 @@ class HTML_pages(object):
         <body>
             <h1>Image upload</h1>
             <form action="http://localhost:5000/input" method="post" enctype = "multipart/form-data">
-              <input id="img2" type="file" name="img2" accept=".jpg,.png,.ppm">
-              <input type="submit">
+                <input id="img2" type="file" name="img2" accept=".jpg,.png,.ppm">
+                <input type="submit">
             </form>
         </body>
     </html>
